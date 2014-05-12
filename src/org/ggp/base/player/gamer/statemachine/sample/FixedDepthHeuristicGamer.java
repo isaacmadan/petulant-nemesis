@@ -18,7 +18,7 @@ import org.ggp.base.util.statemachine.exceptions.MoveDefinitionException;
 import org.ggp.base.util.statemachine.exceptions.TransitionDefinitionException;
 import org.ggp.base.util.statemachine.implementation.prover.ProverStateMachine;
 
-public final class BoundedDepthSearchGamer extends StateMachineGamer {
+public final class FixedDepthHeuristicGamer extends StateMachineGamer {
 
 	@Override
 	public String getName() {
@@ -53,7 +53,7 @@ public final class BoundedDepthSearchGamer extends StateMachineGamer {
 			GoalDefinitionException {
 	}
 
-	private int limit = 3;
+	private int limit = 2;
 
 	@Override
 	public Move stateMachineSelectMove(long timeout) throws TransitionDefinitionException, MoveDefinitionException, GoalDefinitionException {
@@ -80,7 +80,7 @@ public final class BoundedDepthSearchGamer extends StateMachineGamer {
 		if (getStateMachine().isTerminal(state)) {
 			return getStateMachine().getGoal(state, role);
 		}
-		if(level >= limit) return 0;
+		if(level >= limit) return evalfn(role,state);
 		int value = Integer.MIN_VALUE;
 		List<Move> moves = getStateMachine().getLegalMoves(state, getRole());
 		for (Move move : moves) {
@@ -97,5 +97,22 @@ public final class BoundedDepthSearchGamer extends StateMachineGamer {
 			value = Math.min(value, maxScore(nextState, role, level+1));
 		}
 		return value;
+	}
+
+	private int evalfn(Role role, MachineState state) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
+		return getProximity(role,state);
+	}
+
+	private int mobility(Role role, MachineState state) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
+		List<Move> legalMoves = getStateMachine().getLegalMoves(state, getRole());
+		return Math.min(legalMoves.size(), 100);
+	}
+
+	private int focus(Role role, MachineState state) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
+		return 100 - mobility(role, state);
+	}
+
+	private int getProximity(Role role, MachineState state) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
+		return getStateMachine().getGoal(state, role);
 	}
 }

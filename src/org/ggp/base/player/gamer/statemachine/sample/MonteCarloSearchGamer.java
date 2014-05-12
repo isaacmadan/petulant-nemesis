@@ -18,7 +18,7 @@ import org.ggp.base.util.statemachine.exceptions.MoveDefinitionException;
 import org.ggp.base.util.statemachine.exceptions.TransitionDefinitionException;
 import org.ggp.base.util.statemachine.implementation.prover.ProverStateMachine;
 
-public final class BoundedDepthSearchGamer extends StateMachineGamer {
+public final class MonteCarloSearchGamer extends StateMachineGamer {
 
 	@Override
 	public String getName() {
@@ -53,17 +53,17 @@ public final class BoundedDepthSearchGamer extends StateMachineGamer {
 			GoalDefinitionException {
 	}
 
-	private int limit = 3;
+	private int limit = 2;
 
 	@Override
 	public Move stateMachineSelectMove(long timeout) throws TransitionDefinitionException, MoveDefinitionException, GoalDefinitionException {
 		long start = System.currentTimeMillis();
 
-		int score = Integer.MIN_VALUE;
+		double score = Integer.MIN_VALUE;
 		Move thisMove = null;
 		List<Move> moves = getStateMachine().getLegalMoves(getCurrentState(), getRole());
 		for (Move move : moves) {
-			int result = minScore(getCurrentState(), getRole(), move, 0);
+			double result = minScore(getCurrentState(), getRole(), move, 0);
 			if (result > score) {
 				score = result;
 				thisMove = move;
@@ -76,12 +76,12 @@ public final class BoundedDepthSearchGamer extends StateMachineGamer {
 		return thisMove;
 	}
 
-	private int maxScore(MachineState state, Role role, int level) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
+	private double maxScore(MachineState state, Role role, int level) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
 		if (getStateMachine().isTerminal(state)) {
 			return getStateMachine().getGoal(state, role);
 		}
-		if(level >= limit) return 0;
-		int value = Integer.MIN_VALUE;
+		if(level >= limit) return monteCarlo(role,state,4);
+		double value = Integer.MIN_VALUE;
 		List<Move> moves = getStateMachine().getLegalMoves(state, getRole());
 		for (Move move : moves) {
 			value = Math.max(value, minScore(state, role, move, level));
@@ -89,13 +89,32 @@ public final class BoundedDepthSearchGamer extends StateMachineGamer {
 		return value;
 	}
 
-	private int minScore(MachineState state, Role role, Move move, int level) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
-		int value = Integer.MAX_VALUE;
+	private double minScore(MachineState state, Role role, Move move, int level) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
+		double value = Integer.MAX_VALUE;
 		List<List<Move>> moves = getStateMachine().getLegalJointMoves(state, role, move);
 		for (List<Move> jointMove : moves) {
 			MachineState nextState = getStateMachine().getNextState(state, jointMove);
 			value = Math.min(value, maxScore(nextState, role, level+1));
 		}
 		return value;
+	}
+
+	private double monteCarlo(Role role, MachineState state, int count) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
+		int total = 0;
+		for(int i = 0; i < count; i++) {
+			total = total + depthCharge(role, state);
+		}
+		return total/count;
+	}
+
+	private int depthCharge(Role role, MachineState state) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
+		if (getStateMachine().isTerminal(state)) {
+			return getStateMachine().getGoal(state, role);
+		}
+		List<List<Move>> moves = getStateMachine().getLegalJointMoves(state);
+		int index = (int)(Math.random() * moves.size());
+		List<Move> randomList = moves.get(index);
+		MachineState randomNextState = getStateMachine().getNextState(state, randomList);
+		return depthCharge(role, randomNextState);
 	}
 }
