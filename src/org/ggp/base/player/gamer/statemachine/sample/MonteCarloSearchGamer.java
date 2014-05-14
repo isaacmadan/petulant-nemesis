@@ -53,9 +53,75 @@ public final class MonteCarloSearchGamer extends StateMachineGamer {
 			GoalDefinitionException {
 	}
 
-	private int limit = 2;
+	class ScoreMove {
+	    public int score;
+	    public Move move;
+	}
+
+	public ScoreMove minimaxMove(MachineState state, int alpha, int beta, int depth) throws TransitionDefinitionException, MoveDefinitionException, GoalDefinitionException {
+		Role role = getRole();
+		if (getStateMachine().isTerminal(state)) {
+			ScoreMove sm = new ScoreMove();
+			sm.score = getStateMachine().getGoal(state, role);
+			return sm;
+//			return getStateMachine().getGoal(state, role);
+		}
+
+		Move bestMove = null;
+		int bestScore = alpha;
+//		int movesLookedAt = 0;
+		List<Move> moves = getStateMachine().getLegalMoves(getCurrentState(), getRole());
+		for(Move move : moves) {
+			List<List<Move>> jointMoves = getStateMachine().getLegalJointMoves(state, role, move);
+			int worstScore = beta;
+			for(List<Move> jointMove : jointMoves) {
+				MachineState nextState = getStateMachine().getNextState(state, jointMove);
+				ScoreMove sm = minimaxMove(nextState, bestScore, worstScore, depth+1);
+//				int value = minimaxMove(nextState, bestScore, worstScore, depth+1);
+				int value = sm.score;
+				worstScore = Math.min(worstScore, value);
+				if(worstScore <= bestScore) {
+					worstScore = bestScore;
+					break;
+				}
+			}
+
+			if(bestScore >= beta) {
+				ScoreMove sm = new ScoreMove();
+				sm.move = move;
+				sm.score = worstScore;
+				return sm;
+//				return worstScore;
+			}
+			if(bestScore < worstScore) {
+				bestScore = worstScore;
+				bestMove = move;
+			}
+		}
+		ScoreMove sm = new ScoreMove();
+		sm.score = bestScore;
+		sm.move = bestMove;
+		return sm;
+//		return bestScore;
+	}
+
+	private int limit = 4;
 
 	@Override
+	public Move stateMachineSelectMove(long timeout) throws TransitionDefinitionException, MoveDefinitionException, GoalDefinitionException {
+		long start = System.currentTimeMillis();
+		List<Move> moves = getStateMachine().getLegalMoves(getCurrentState(), getRole());
+		if(moves.size() == 1) {
+			return moves.get(0);
+		}
+		ScoreMove thisScoreMove = minimaxMove(getCurrentState(), Integer.MIN_VALUE, Integer.MAX_VALUE, 0);
+		Move thisMove = thisScoreMove.move;
+		long stop = System.currentTimeMillis();
+		notifyObservers(new GamerSelectedMoveEvent(moves, thisMove, stop - start));
+		return thisMove;
+	}
+
+	/**
 	public Move stateMachineSelectMove(long timeout) throws TransitionDefinitionException, MoveDefinitionException, GoalDefinitionException {
 		long start = System.currentTimeMillis();
 
@@ -75,6 +141,7 @@ public final class MonteCarloSearchGamer extends StateMachineGamer {
 
 		return thisMove;
 	}
+	**/
 
 	private double maxScore(MachineState state, Role role, int level) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
 		if (getStateMachine().isTerminal(state)) {
