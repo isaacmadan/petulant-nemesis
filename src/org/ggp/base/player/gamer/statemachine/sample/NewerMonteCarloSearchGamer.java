@@ -1,7 +1,6 @@
 package org.ggp.base.player.gamer.statemachine.sample;
 
 import java.util.List;
-import java.util.Random;
 
 import org.ggp.base.apps.player.detail.DetailPanel;
 import org.ggp.base.apps.player.detail.SimpleDetailPanel;
@@ -19,7 +18,7 @@ import org.ggp.base.util.statemachine.exceptions.MoveDefinitionException;
 import org.ggp.base.util.statemachine.exceptions.TransitionDefinitionException;
 import org.ggp.base.util.statemachine.implementation.prover.ProverStateMachine;
 
-public final class MonteCarloSearchGamer extends StateMachineGamer {
+public final class NewerMonteCarloSearchGamer extends StateMachineGamer {
 
 	@Override
 	public String getName() {
@@ -54,86 +53,14 @@ public final class MonteCarloSearchGamer extends StateMachineGamer {
 			GoalDefinitionException {
 	}
 
-	class ScoreMove {
-	    public int score;
-	    public Move move;
-	}
-
-	public ScoreMove minimaxMove(MachineState state, int alpha, int beta, int depth) throws TransitionDefinitionException, MoveDefinitionException, GoalDefinitionException {
-		Role role = getRole();
-		if (getStateMachine().isTerminal(state)) {
-			ScoreMove sm = new ScoreMove();
-			sm.score = getStateMachine().getGoal(state, role);
-			return sm;
-//			return getStateMachine().getGoal(state, role);
-		}
-
-		Move bestMove = null;
-		int bestScore = alpha;
-//		int movesLookedAt = 0;
-
-		List<Move> moves = getStateMachine().getLegalMoves(getCurrentState(), getRole());
-		Random randomGenerator = new Random();
-		if(depth == 2) {
-			Move move = moves.get(randomGenerator.nextInt(moves.size()));
-			List<List<Move>> jointMoves = getStateMachine().getLegalJointMoves(state, role, move);
-			List<Move> jointMove = jointMoves.get(randomGenerator.nextInt(jointMoves.size()));
-			MachineState nextState = getStateMachine().getNextState(state, jointMove);
-			ScoreMove sm = minimaxMove(nextState, bestScore, worstScore, depth+1);
-		}
-		for(Move move : moves) {
-			List<List<Move>> jointMoves = getStateMachine().getLegalJointMoves(state, role, move);
-			int worstScore = beta;
-			for(List<Move> jointMove : jointMoves) {
-				MachineState nextState = getStateMachine().getNextState(state, jointMove);
-				ScoreMove sm = minimaxMove(nextState, bestScore, worstScore, depth+1);
-//				int value = minimaxMove(nextState, bestScore, worstScore, depth+1);
-				int value = sm.score;
-				worstScore = Math.min(worstScore, value);
-				if(worstScore <= bestScore) {
-					worstScore = bestScore;
-					break;
-				}
-			}
-
-			if(bestScore >= beta) {
-				ScoreMove sm = new ScoreMove();
-				sm.move = move;
-				sm.score = worstScore;
-				return sm;
-//				return worstScore;
-			}
-			if(bestScore < worstScore) {
-				bestScore = worstScore;
-				bestMove = move;
-			}
-		}
-		ScoreMove sm = new ScoreMove();
-		sm.score = bestScore;
-		sm.move = bestMove;
-		return sm;
-//		return bestScore;
-	}
-
 	private int limit = 4;
+	private long timelimit = 18500;
+	private long starttime = 0;
 
 	@Override
 	public Move stateMachineSelectMove(long timeout) throws TransitionDefinitionException, MoveDefinitionException, GoalDefinitionException {
 		long start = System.currentTimeMillis();
-		List<Move> moves = getStateMachine().getLegalMoves(getCurrentState(), getRole());
-		if(moves.size() == 1) {
-			return moves.get(0);
-		}
-		ScoreMove thisScoreMove = minimaxMove(getCurrentState(), Integer.MIN_VALUE, Integer.MAX_VALUE, 0);
-		Move thisMove = thisScoreMove.move;
-		long stop = System.currentTimeMillis();
-		notifyObservers(new GamerSelectedMoveEvent(moves, thisMove, stop - start));
-		return thisMove;
-	}
-
-	/**
-	public Move stateMachineSelectMove(long timeout) throws TransitionDefinitionException, MoveDefinitionException, GoalDefinitionException {
-		long start = System.currentTimeMillis();
+		starttime = System.currentTimeMillis();
 
 		double score = Integer.MIN_VALUE;
 		Move thisMove = null;
@@ -144,6 +71,8 @@ public final class MonteCarloSearchGamer extends StateMachineGamer {
 				score = result;
 				thisMove = move;
 			}
+
+			if(System.currentTimeMillis()-starttime > timelimit) break;
 		}
 
 		long stop = System.currentTimeMillis();
@@ -151,17 +80,17 @@ public final class MonteCarloSearchGamer extends StateMachineGamer {
 
 		return thisMove;
 	}
-	**/
 
 	private double maxScore(MachineState state, Role role, int level) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
 		if (getStateMachine().isTerminal(state)) {
 			return getStateMachine().getGoal(state, role);
 		}
-		if(level >= limit) return monteCarlo(role,state,4);
+		if(level >= limit) return monteCarlo(role, state, 10);
 		double value = Integer.MIN_VALUE;
 		List<Move> moves = getStateMachine().getLegalMoves(state, getRole());
 		for (Move move : moves) {
 			value = Math.max(value, minScore(state, role, move, level));
+			if(System.currentTimeMillis()-starttime > timelimit) break;
 		}
 		return value;
 	}
@@ -172,26 +101,31 @@ public final class MonteCarloSearchGamer extends StateMachineGamer {
 		for (List<Move> jointMove : moves) {
 			MachineState nextState = getStateMachine().getNextState(state, jointMove);
 			value = Math.min(value, maxScore(nextState, role, level+1));
+			if(System.currentTimeMillis()-starttime > timelimit) break;
 		}
 		return value;
 	}
 
 	private double monteCarlo(Role role, MachineState state, int count) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
-		int total = 0;
-		for(int i = 0; i < count; i++) {
+		double total = 0;
+		for(int i=0; i < count; i++) {
 			total = total + depthCharge(role, state);
+			if(System.currentTimeMillis()-starttime > timelimit) break;
 		}
 		return total/count;
 	}
 
-	private int depthCharge(Role role, MachineState state) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
+	private double depthCharge(Role role, MachineState state) throws MoveDefinitionException, TransitionDefinitionException, GoalDefinitionException {
 		if (getStateMachine().isTerminal(state)) {
 			return getStateMachine().getGoal(state, role);
 		}
-		List<List<Move>> moves = getStateMachine().getLegalJointMoves(state);
-		int index = (int)(Math.random() * moves.size());
-		List<Move> randomList = moves.get(index);
-		MachineState randomNextState = getStateMachine().getNextState(state, randomList);
-		return depthCharge(role, randomNextState);
+
+		List<List <Move>> jointMoves = getStateMachine().getLegalJointMoves(state);
+		int rand = (int)(Math.random() * jointMoves.size());
+		List<Move> randomJointMove = jointMoves.get(rand);
+
+		MachineState nextState = getStateMachine().getNextState(state, randomJointMove);
+		return depthCharge(role, nextState);
 	}
+
 }
