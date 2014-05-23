@@ -53,14 +53,16 @@ public final class NewerMonteCarloSearchGamer extends StateMachineGamer {
 			GoalDefinitionException {
 	}
 
-	private int limit = 4;
-	private long timelimit = 18500;
+	private int limit = 2;
+	private long timelimit = 0;
 	private long starttime = 0;
 
 	@Override
 	public Move stateMachineSelectMove(long timeout) throws TransitionDefinitionException, MoveDefinitionException, GoalDefinitionException {
 		long start = System.currentTimeMillis();
 		starttime = System.currentTimeMillis();
+		timelimit = timeout-start-1000;
+		System.out.println(timelimit);
 
 		double score = Integer.MIN_VALUE;
 		Move thisMove = null;
@@ -85,7 +87,7 @@ public final class NewerMonteCarloSearchGamer extends StateMachineGamer {
 		if (getStateMachine().isTerminal(state)) {
 			return getStateMachine().getGoal(state, role);
 		}
-		if(level >= limit) return monteCarlo(role, state, 10);
+		if(level >= limit) return monteCarlo(role, state, 6);
 		double value = Integer.MIN_VALUE;
 		List<Move> moves = getStateMachine().getLegalMoves(state, getRole());
 		for (Move move : moves) {
